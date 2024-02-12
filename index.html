@@ -1,0 +1,759 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=Edge">
+
+    <!--Import Google Icon Font-->
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet" />
+    <!-- <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet"> -->
+    <!--Import materialize.css-->
+    <!-- <link type="text/css" rel="stylesheet" href="materialize.min.css" media="screen,projection" /> -->
+    <!-- Let browser know website is optimized for mobile -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <title>kawakami-v1.0</title>
+
+    <script src="./bundle.js"></script>
+    <script>
+        // ===========================================================
+        // =   kawakami-v1.0 Core Script                             =
+        // ===========================================================
+        var upd;
+
+        function send(json) {
+            let url = "http://0.0.0.0:29945/"
+            var xhr = new XMLHttpRequest();
+            xhr.open("POST", url, true)
+            xhr.timeout = 100;
+            xhr.send(JSON.stringify(json));
+        }
+
+        function SendInit() {
+            // スクリプトを更新する。
+            setInterval(() => {
+                ReloadDataScript("way.js");
+                var recive = data(); // 外部スクリプト
+                var timestamp = recive["timestamp"];
+                var order = recive["order"];
+                var raw = recive["raw"];
+                if (upd == "") upd = timestamp;
+                if (upd != timestamp) {
+                    if (order) {
+                        // 関数が指定されたらそのまま実行。
+                        eval("kwkm_" + order + "(" + JSON.stringify(raw) + ")");
+                    }
+                }
+                upd = timestamp;
+            }, 10);
+        }
+
+        // スクリプトファイルを即座に再読み込みする
+        function ReloadDataScript(src) {
+            var head = document.getElementById('readscript');
+            head.innerHTML = "";
+            var script = document.createElement('script');
+            script.src = src + "?" + Date.now();
+            head.appendChild(script);
+        }
+
+        function kwkm_init(raw) {}
+
+        function kwkm_recived(raw) {}
+
+        SendInit();
+
+        // ===========================================================
+        // =========================================================== Core End
+
+        function kwkm_picked(raw) {
+            const e = document.getElementById('input-path');
+            e.setAttribute("value", raw["path"]);
+            e.value = raw["path"];
+        }
+
+        function kwkm_pickedDest(raw) {
+            const e = document.getElementById('input-destpath');
+            e.setAttribute("value", raw["path"]);
+            e.value = raw["path"];
+        }
+
+        function kwkm_pickedOpenDest(raw) {
+            const e = document.getElementById('input-open-path');
+            e.setAttribute("value", raw["path"]);
+            e.value = raw["path"];
+        }
+
+
+        function kwkm_processEnd(raw) {
+
+            if (raw.stderr != "" || raw.failedMessage != "") {
+                document.getElementById("result-icon").innerText = "priority_high";
+                document.getElementById("result").innerText = "Failed";
+
+                if (raw.failedMessage != "") {
+                    raw.exitcode = "---";
+                    raw.stderr = "---";
+                } else {
+                    raw.failedBlockId = "---";
+                    raw.failedType = "---";
+                    raw.failedMessage = "---";
+                }
+
+                document.getElementById("errorMessage").innerHTML = `
+                <h3 class="primary">Shell</h3>
+                <p>Exitcode: ${raw.exitcode}</p>
+                <p>command: ${raw.cmd}</p>
+                <p>std-err: ${raw.stderr}</p>
+                <h3 class="primary">Failure catch</h3>
+                <p>Failed BID: ${raw.failedBlockId}</p>
+                <p>Failed Type: ${raw.failedType}</p>
+                <p>Failed Message: ${raw.failedMessage}</p>
+
+                <h3 class="primary">Tips:</h3>
+                <p> - Is the path you entered correct?</p>
+                <p> - You may not be able to select more than one compression type.</p>
+                <p> - Are permissions properly granted?</p>
+                <p> - Errors such as 'exec xz' may indicate that the xz binary is not installed on the device.</p>
+                `;
+
+                setTimeout(() => {
+                    document.getElementById("dialog-error").setAttribute("open", "");
+                }, 1500);
+                // alert("d");
+
+            }
+
+            setView("archive_result", "LEFT");
+
+        }
+
+        const app = {
+            seletedPath: ''
+        }
+
+        function opentar() {
+            const path = document.getElementById('input-path').value;
+            if (path == "") {
+                document.getElementById('dialog-nopath').setAttribute("open", "");
+                return
+            }
+            app.seletedPath = path;
+            document.getElementById('selectedPath2').value = path;
+            setView('opentar', "LEFT");
+
+        }
+
+        function create() {
+            const path = document.getElementById('input-path').value;
+            if (path == "") {
+                document.getElementById('dialog-nopath').setAttribute("open", "");
+                return
+            }
+            app.seletedPath = path;
+            document.getElementById('selectedPath').value = path;
+            setView('create', "LEFT");
+
+        }
+
+        function startProcess() {
+            const destPath = document.getElementById('input-destpath').value;
+
+            const no_recursion = document.getElementById('no-recursion').selected;
+            const restrict = document.getElementById('restrict').selected;
+            const z = document.getElementById('z').selected;
+            const j = document.getElementById('j').selected;
+            const jxz = document.getElementById('jxz').selected;
+            const exclude = document.getElementById('exclude').value;
+            const h = document.getElementById('h').selected;
+
+            if (destPath == "") {
+                document.getElementById('dialog-nodestpath').setAttribute('open', '');
+                return;
+            }
+
+            const cmd = "tar -c" + (z ? "z" : "") + (j ? "j" : "") + (jxz ? "J" : "") + (h ? "h" : "") + (restrict ? " --restrict" : "") + (no_recursion ? " --no-recursion" : "");
+            send({
+                "act": "process",
+                "cmd": cmd,
+                "exclude": (exclude ? exclude : ""),
+                "selectedPath": app.seletedPath,
+                "destPath": destPath
+            });
+
+            setView('processing', 'left');
+
+            return;
+        }
+
+        function startOpenProcess() {
+            const destPath = document.getElementById('input-open-path').value;
+            if (destPath == "") {
+                document.getElementById('dialog-nodestpath').setAttribute('open', '');
+                return;
+            }
+
+            const cmd = "tar -x"
+            send({
+                "act": "processOpen",
+                "cmd": cmd,
+                "selectedPath": app.seletedPath,
+                "destPath": destPath
+            });
+            setView('processing', 'left');
+            return;
+        }
+
+
+        let nowView = "main";
+
+        function setView(name, transition = "") {
+            transition = transition.toLocaleLowerCase();
+
+            currentView = document.getElementById("view-" + nowView);
+            destinationView = document.getElementById("view-" + name);
+
+
+            currentView.setAttribute('class', 'start-anim-' + transition + 'fadeout')
+            destinationView.setAttribute('class', 'start-anim-' + transition + 'fadein');
+            destinationView.style.display = "block";
+
+
+            nowView = name;
+        }
+    </script>
+
+    <!-- <link type="text/css" rel="stylesheet" href="theme/light.css" />
+    <link type="text/css" rel="stylesheet" href="theme/light-hc.css" />
+    <link type="text/css" rel="stylesheet" href="theme/light-mc.css" />
+    <link type="text/css" rel="stylesheet" href="theme/dark.css" />
+    <link type="text/css" rel="stylesheet" href="theme/dark-hc.css" />
+    <link type="text/css" rel="stylesheet" href="theme/dark-mc.css" /> -->
+    <link type="text/css" rel="stylesheet" href="theme/auto.css" />
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto&display=swap" rel="stylesheet">
+
+</head>
+
+<!-- <body class="dark"> -->
+
+<body>
+    <style>
+        .start-anim-leftfadeout {
+            /* opacity: 0; */
+            animation-name: leftFadeout;
+            animation-timing-function: cubic-bezier(0.075, 0.82, 0.165, 1);
+            animation-duration: 2000ms;
+            transform: translateX(-100vw);
+            opacity: 0;
+            padding: 16px;
+        }
+        
+        @keyframes leftFadeout {
+            0% {
+                opacity: 1.0;
+                transform: translateX(0%);
+            }
+            100% {
+                opacity: 0.0;
+                transform: translateX(-100vw);
+            }
+        }
+        
+        .start-anim-leftfadein {
+            /* opacity: 0; */
+            animation-name: leftFadein;
+            animation-timing-function: cubic-bezier(0.075, 0.82, 0.165, 1);
+            animation-duration: 800ms;
+            transform: translateX(0px);
+            opacity: 1.0;
+            padding: 16px;
+        }
+        
+        @keyframes leftFadein {
+            0% {
+                opacity: 0.0;
+                transform: translateX(100vw);
+            }
+            100% {
+                opacity: 1.0;
+                transform: translateX(0px);
+            }
+        }
+        
+        .start-anim-rightfadeout {
+            /* opacity: 0; */
+            animation-name: rightFadeout;
+            animation-timing-function: cubic-bezier(0.075, 0.82, 0.165, 1);
+            animation-duration: 2000ms;
+            transform: translateX(100vw);
+            opacity: 0;
+            padding: 16px;
+        }
+        
+        @keyframes rightFadeout {
+            0% {
+                opacity: 1.0;
+                transform: translateX(0%);
+            }
+            100% {
+                opacity: 0.0;
+                transform: translateX(100vw);
+            }
+        }
+        
+        .start-anim-rightfadein {
+            /* opacity: 0; */
+            animation-name: rightFadein;
+            animation-timing-function: cubic-bezier(0.075, 0.82, 0.165, 1);
+            animation-duration: 800ms;
+            transform: translateX(0%);
+            opacity: 1.0;
+            padding: 16px;
+        }
+        
+        @keyframes rightFadein {
+            0% {
+                opacity: 0.0;
+                transform: translateX(-100vw);
+            }
+            100% {
+                opacity: 1.0;
+                transform: translateX(0%);
+            }
+        }
+        
+        .w100 {
+            width: 100%;
+        }
+        
+        .margin32 {
+            margin: 32px;
+        }
+        
+        .margin16 {
+            margin: 16px;
+        }
+        
+        .margin8 {
+            margin: 8px;
+        }
+        
+        .padding8 {
+            padding: 8px;
+        }
+        
+         :root {
+            --md-ref-typeface-brand: 'Open Sans';
+            --md-ref-typeface-plain: system-ui;
+            font-size: medium;
+            font-family: Roboto;
+            --md-outlined-text-field-container-shape: 16px;
+        }
+        
+        .primary {
+            color: var(--md-sys-color-primary);
+        }
+        
+        .primary-container {
+            color: var(--md-sys-color-on-primary-container);
+        }
+        
+        .field {
+            /* padding: 16px; */
+            background-color: var(--md-sys-color-surface);
+            height: 90%;
+            width: 100%;
+            border-radius: 32px;
+            box-sizing: border-box;
+            overflow-y: scroll;
+            position: relative;
+        }
+        
+        .field::-webkit-scrollbar {
+            display: none;
+        }
+        
+        md-icon,
+        md-switch,
+        .switch {
+            vertical-align: middle;
+            margin: 0px 8px;
+        }
+        
+        html,
+        body {
+            color: var(--md-sys-color-on-primary-container);
+            background-color: var(--md-sys-color-surface-container);
+            height: 97%;
+            margin: 0px;
+            padding: 0px;
+            /* overflow: hidden; */
+            box-sizing: border-box;
+        }
+        
+        .container {
+            height: 90%;
+            margin: 16px;
+            box-sizing: border-box;
+        }
+        
+        view {
+            width: 100%;
+            position: absolute;
+            box-sizing: border-box;
+            padding: 16px;
+        }
+    </style>
+    <!-- Link automate -->
+    <div style="display: none; visibility: hidden;" id="readscript"></div>
+
+    <!-- dialogs -->
+    <md-dialog id="dialog-nopath">
+        <div slot="headline">
+            Oops!
+        </div>
+        <div slot="content">
+            <p>The path to the folder to be archived is not specified.</p>
+            <p>You can select a folder from the buttons above or enter the path manually.</p>
+        </div>
+        <form method="dialog" slot="actions">
+            <md-text-button>OK</md-text-button>
+            </div>
+        </form>
+    </md-dialog>
+
+    <md-dialog id="dialog-nodestpath">
+        <div slot="headline">
+            Oops!
+        </div>
+        <div slot="content">
+            <p>The destination path is not specified.</p>
+            <p>(The destination path must include a filename.)</p>
+            <p>You can select a folder from the buttons above or enter the path manually.</p>
+        </div>
+        <form method="dialog" slot="actions">
+            <md-text-button>OK</md-text-button>
+            </div>
+        </form>
+    </md-dialog>
+
+
+    <md-dialog id="dialog-error">
+        <div slot="headline">
+            Oops!
+        </div>
+        <div slot="content">
+            <p class="primary">Some error seems to have occurred.</p>
+            <div class="margin16"></div>
+            <p id="errorMessage"></p>
+
+        </div>
+        <form method="dialog" slot="actions">
+            <md-text-button>Close</md-text-button>
+            </div>
+        </form>
+    </md-dialog>
+
+    <!-- APP View container -->
+    <div class="container">
+        <div class="margin8">
+            <h1 class="primary">Tar <i>A/O </i> (v0.27.1)</h1>
+            <p class="primary-container">Tar Archive & Opener (by. lighfu #29945)</p>
+        </div>
+        <div class="margin8"></div>
+
+        <div class="field">
+
+
+
+
+
+
+            <view id="view-main">
+                <h2 class="primary">Home</h2>
+
+                <div style="text-align: center;">
+                    <md-filled-tonal-button class="w100" onclick='send({"act":"select"})'>
+                        <md-icon>folder</md-icon>
+                        Call File picker
+                    </md-filled-tonal-button>
+                </div>
+
+                <div class="margin16"></div>
+
+                <md-outlined-text-field required id="input-path" class="w100" label="Folder or File path" value="">
+                </md-outlined-text-field>
+
+                <div class="margin32"></div>
+
+                <div style="text-align: center;">
+                    <md-filled-tonal-button class="w100" onclick="create()">
+                        <md-icon>archive</md-icon>
+                        Create archive
+                    </md-filled-tonal-button>
+                </div>
+                <div class="margin32"></div>
+
+                <div style="text-align: center;">
+                    <md-filled-tonal-button class="w100 " onclick="opentar()">
+                        <md-icon>file_open</md-icon>
+                        Open archive
+                    </md-filled-tonal-button>
+                </div>
+            </view>
+
+
+
+
+            <view id="view-create" style="display: none;">
+                <div style="text-align: center;">
+                    <md-filled-tonal-button style="width: 100%;" onclick="setView('main','RIGHT')">
+                        <md-icon>arrow_left</md-icon>
+                        Back
+                    </md-filled-tonal-button>
+
+                </div>
+
+                <div class="margin32"></div>
+                <h2 class="primary">Create archive</h2>
+                <div class="margin32"></div>
+
+
+                <md-outlined-text-field id="selectedPath" disabled class="w100" label="Folder path" value="" placeholder="Folder path">
+                </md-outlined-text-field>
+
+                <div class="margin16"></div>
+
+
+                <label class="w100" style="display: flex; align-items:center;"> 
+                    <div style="width: 80%;">
+                        <h3>- - no-recursion</h3>
+                        <p class="primary-container">Skip recursively process directories</p>
+                    </div>
+                <md-switch id="no-recursion" style="width: 20%;"></md-switch>
+                </label>
+
+                <div class="margin16"></div>
+
+                <label class="w100" style="display: flex; align-items:center;"> 
+                    <div style="width: 80%;">
+                        <h3>- - restrict</h3>
+                        <p class="primary-container">All under one dir</p>
+                    </div>
+                <md-switch id="restrict" style="width: 20%;"></md-switch>
+                </label>
+
+                <div class="margin16"></div>
+
+                <!-- <label class="w100" style="display: flex; align-items:center;"> 
+                    <div style="width: 80%;">
+                        <h3>- - remove-files</h3>
+                        <p class="primary-container">Deleting a file after adding it to the archive</p>
+                    </div>
+                <md-switch style="width: 20%;"></md-switch>
+                </label> -->
+                <!-- 
+                <div class="margin16"></div>
+
+                <div role="radiogroup" aria-labelledby="group-title">
+                    <h3 id="group-title">Compress option</h3>
+                    <div>
+                        <md-radio id="first-radio" name="group" value="1" aria-label="First"></md-radio>
+                        <label for="first-radio">None</label>
+                    </div>
+                    <div class="margin16"></div>
+                    <div>
+                        <md-radio id="second-radio" name="group" value="2" aria-label="Second"></md-radio>
+                        <label for="second-radio">gzip</label>
+                    </div>
+                </div> -->
+
+                <div class="margin16"></div>
+
+
+                <label class="w100" style="display: flex; align-items:center;"> 
+                    <div style="width: 80%;">
+                        <h3>- - gzip / -z</h3>
+                        <p class="primary-container">Compress the archive in gzip format</p>
+                    </div>
+                <md-switch id="z" style="width: 20%;"></md-switch>
+                </label>
+
+                <div class="margin16"></div>
+
+                <label class="w100" style="display: flex; align-items:center;"> 
+                    <div style="width: 80%;">
+                        <h3>- - bzip / -j</h3>
+                        <p class="primary-container">Compress the archive in bzip format</p>
+                    </div>
+                <md-switch id="j" style="width: 20%;"></md-switch>
+                </label>
+
+                <div class="margin16"></div>
+
+                <label class="w100" style="display: flex; align-items:center;"> 
+                    <div style="width: 80%;">
+                        <h3>- - xz / -J</h3>
+                        <p class="primary-container">Compress the archive in xz format</p>
+                    </div>
+                <md-switch id="jxz" style="width: 20%;"></md-switch>
+                </label>
+
+                <div class="margin16"></div>
+
+                <h3>- - exclude</h3>
+                <md-outlined-text-field id="exclude" class="w100" label="exclude" value="" placeholder="FILENAME to exclude">
+                </md-outlined-text-field>
+
+                <div class="margin16"></div>
+
+                <label class="w100" style="display: flex; align-items:center;"> 
+                    <div style="width: 80%;">
+                        <h3>- - dereference / -h</h3>
+                        <p class="primary-container">Follow the symbolic link</p>
+                    </div>
+                <md-switch id="h" style="width: 20%;"></md-switch>
+                </label>
+
+                <div class="margin16"></div>
+
+
+                <div style="text-align: center;">
+                    <md-filled-tonal-button class="w100" onclick='send({"act":"selectDest"})'>
+                        <md-icon>folder</md-icon>
+                        Pick Destination path
+                    </md-filled-tonal-button>
+                </div>
+
+                <div class="margin16"></div>
+
+
+                <md-outlined-text-field required id="input-destpath" class="w100" label="Destination path" value="" placeholder="Destination path">
+                </md-outlined-text-field>
+
+                <div class="margin32"></div>
+
+                <div style="text-align: center;">
+                    <md-filled-button class="w100" onclick='startProcess()'>
+                        Start archive
+                        <md-icon>arrow_right</md-icon>
+
+                    </md-filled-button>
+                </div>
+
+            </view>
+
+
+
+
+
+
+
+
+            <view id="view-processing" style="display: none; height: 100%;">
+                <div style="text-align: center; padding-top: 50%;">
+                    <md-circular-progress indeterminate></md-circular-progress>
+                    <h2 onclick="kwkm_processEnd()">Processing...</h2>
+                </div>
+            </view>
+
+
+
+
+
+
+
+            <view id="view-archive_result" style="display: none; height: 100%;">
+                <div style="text-align: center; margin-top: 50%;">
+                    <style>
+                        .checkIconsize {
+                            --md-icon-button-icon-size: 127px;
+                        }
+                    </style>
+                    <md-icon-button class="checkIconsize">
+                        <md-icon id="result-icon">check</md-icon>
+                    </md-icon-button>
+                    <h2 id="result">Successful</h2>
+                </div>
+
+                <div class="margin32"></div>
+                <p class="primary-container"></p>
+                <div class="margin32"></div>
+
+                <div style="text-align: center;">
+                    <md-filled-button class="w100" onclick='setView("main","right")'>
+                        <md-icon>home</md-icon>
+                        Back to home
+                    </md-filled-button>
+                </div>
+
+
+                <!-- <h2 class="primary-container">>_ Stat</h2>
+                <p>Exitcode: <span id="exitcode"></span></p>
+                <p>StdOut: <span id="stdout"></span></p> -->
+            </view>
+
+
+
+
+
+            <view id="view-opentar" style="display: none;">
+                <div style="text-align: center;">
+                    <md-filled-tonal-button style="width: 100%;" onclick="setView('main','RIGHT')">
+                        <md-icon>arrow_left</md-icon>
+                        Back
+                    </md-filled-tonal-button>
+
+                </div>
+
+                <div class="margin32"></div>
+
+                <h2 class="primary">Open archive</h2>
+
+
+
+
+                <md-outlined-text-field id="selectedPath2" disabled class="w100" label="Archive file path" value="" placeholder="Folder path">
+                </md-outlined-text-field>
+
+                <div class="margin32"></div>
+
+                <div style="text-align: center;">
+                    <md-filled-tonal-button class="w100" onclick='send({"act":"selectOpenDest"})'>
+                        <md-icon>folder</md-icon>
+                        Select Destination Folder
+                    </md-filled-tonal-button>
+                </div>
+
+                <div class="margin16"></div>
+
+                <md-outlined-text-field required id="input-open-path" class="w100" label="Folder path" value="">
+                </md-outlined-text-field>
+
+                <div class="margin32"></div>
+
+                <div style="text-align: center;">
+                    <md-filled-button class="w100" onclick='startOpenProcess()'>
+                        Start extract
+                        <md-icon>arrow_right</md-icon>
+
+                    </md-filled-button>
+                </div>
+            </view>
+
+        </div>
+    </div>
+
+    <!-- <script type="text/javascript" src="materialize.min.js"></script>
+    <script>
+        M.AutoInit();
+    </script> -->
+</body>
+
+</html>
+
+</html>
