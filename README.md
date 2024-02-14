@@ -8,3 +8,4 @@ Material design 3 のスタイルを適応済でライト、ダークテーマ�
 
 このWebUIはkawakamiコンポーネントを基盤としているため、Automate以外では動作しません。
 
+[フローチャート](https://llamalab.com/automate/community/flows/47478)
